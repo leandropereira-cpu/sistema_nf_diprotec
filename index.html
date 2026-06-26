@@ -516,7 +516,22 @@ async function switchTab(tab) {
   const erpWhere  = erpConds.length  ? 'WHERE ' + erpConds.join(' AND ')  : '';
   const coinWhere = coinConds.length ? 'WHERE ' + coinConds.join(' AND ') : '';
 
-  if (tab === 'dw' || tab === 'so-dw' || tab === 'valor-div') {
+  if (tab === 'valor-div') {
+    allData = await query(`
+      SELECT dw.empresa, dw.loja, dw.numero_int AS nota, dw.data, dw.fornecedor,
+             dw.total AS total_acesse,
+             erp.total_dw_val,
+             dw.cfop_norm AS cfop, dw.natureza, dw.estado, dw.status, dw.tipo_entrada
+      FROM parquet_scan('dominio_web.parquet') dw
+      LEFT JOIN (
+        SELECT CAST(nota_int AS BIGINT) AS nota_int, SUM(valor) AS total_dw_val
+        FROM parquet_scan('erp_entradas.parquet')
+        GROUP BY nota_int
+      ) erp ON erp.nota_int = CAST(dw.numero_int AS BIGINT)
+      ${dwWhere}
+      ORDER BY dw.data DESC, dw.loja, dw.numero_int
+    `);
+  } else if (tab === 'dw' || tab === 'so-dw') {
     allData = await query(`
       SELECT empresa, loja, numero_int AS nota, data, fornecedor,
              total, cfop_norm AS cfop, natureza, estado, status, tipo_entrada
@@ -605,13 +620,14 @@ const COL_LABELS = {
   empresa_erp: 'Empresa Dom. Web', cfop: 'CFOP',
   fornecedor: 'Fornecedor', forn_erp: 'Forn. Dom. Web',
   total: 'Total (R$)', valor: 'Valor (R$)', valor_dw: 'Valor Acesse', valor_erp: 'Valor Dom. Web',
+  total_acesse: 'Total Acesse', total_dw_val: 'Total DW',
   cfop_dominio: 'CFOP Acesse', cfop_erp: 'CFOP Dom. Web',
   natureza: 'Natureza', tipo_entrada: 'Tipo Entrada', estado: 'UF', uf: 'UF',
   status: 'Status', empresa: 'Empresa', empresa_id: 'ID Emp.',
   tipo: 'Tipo', data_erp: 'Data Dom. Web',
   empresa_nome: 'Empresa',
 };
-const MONEY_COLS = new Set(['total','valor','valor_dw','valor_erp']);
+const MONEY_COLS = new Set(['total','valor','valor_dw','valor_erp','total_acesse','total_dw_val']);
 const STATUS_MAP = {
   'Ambos - OK':               ['badge-green',  'Ambos — OK'],
   'Ambos - CFOP divergente':  ['badge-orange', 'CFOP divergente'],
