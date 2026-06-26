@@ -9,6 +9,11 @@ notas_excel/
 # Cache de token Azure
 .pbi_token_cache.json
 
+# Chaves privadas — NUNCA commitar
+*.json
+!firebase.json
+!.firebaserc
+
 # Scripts temporários de debug
 debug_*.py
 
