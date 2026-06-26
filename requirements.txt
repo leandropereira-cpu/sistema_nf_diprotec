@@ -1,0 +1,9 @@
+pandas>=2.0
+pyarrow>=14.0
+python-calamine
+pdfplumber
+msal
+requests
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib

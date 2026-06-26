@@ -1,0 +1,41 @@
+name: Atualizar Dados e Deploy
+
+on:
+  workflow_dispatch:          # disparo manual pelo GitHub
+  schedule:
+    - cron: '0 11 * * 1-5'   # 11h UTC = 8h BRT, de seg a sex
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Baixar XLSX do Acesse (scraper)
+        run: python scraper_compras_cfop.py
+
+      - name: Baixar XLS do Google Drive (Domínio Web + Flexotom)
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: python download_drive.py
+
+      - name: Processar notas e gerar Parquet
+        run: python processar_notas.py
+
+      - name: Deploy Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DIPCONTABIL }}
+          projectId: dipcontabil
+          channelId: live

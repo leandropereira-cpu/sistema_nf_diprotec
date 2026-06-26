@@ -1,0 +1,18 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "**/.*",
+      "**/*.py",
+      "**/*.pdf",
+      "**/*.xls",
+      "**/notas_excel/**",
+      "**/downloads_cfop/**",
+      "requirements.txt",
+      "CODIFICAÇÃO EMPRESAS.xlsx",
+      "acesse_unificado.csv"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+# Dados gerados — não commitar, são produzidos pelo pipeline
+data/
+downloads_cfop/
+notas_excel/
+
+# PDFs de entradas (grandes, gerados localmente)
+*.pdf
+
+# Cache de token Azure
+.pbi_token_cache.json
+
+# Scripts temporários de debug
+debug_*.py
+
+# Planilha de codificação de empresas (arquivo local)
+CODIFICAÇÃO EMPRESAS.xlsx
+acesse_unificado.csv
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node / Firebase tools
+node_modules/
+.firebase/

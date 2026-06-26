@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notas Fiscais — Dominio.Web vs ERP</title>
+<style>
+  :root {
+    --bg:      #0f1117;
+    --surface: #1a1d27;
+    --card:    #22263a;
+    --border:  #2e3348;
+    --accent:  #4f7cff;
+    --green:   #34d399;
+    --yellow:  #fbbf24;
+    --orange:  #fb923c;
+    --red:     #f87171;
+    --text:    #e2e8f0;
+    --muted:   #94a3b8;
+    --radius:  10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; gap: 14px; }
+  header h1 { font-size: 18px; font-weight: 700; }
+  header span { color: var(--muted); font-size: 13px; }
+  #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 16px; }
+  .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #app { display: none; padding: 22px 28px; max-width: 1500px; margin: 0 auto; }
+
+  /* Cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 7px; }
+  .card .value { font-size: 26px; font-weight: 700; }
+  .card .sub   { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .card.green  .value { color: var(--green); }
+  .card.yellow .value { color: var(--yellow); }
+  .card.orange .value { color: var(--orange); }
+  .card.red    .value { color: var(--red); }
+  .card.blue   .value { color: var(--accent); }
+
+  /* Periods */
+  .periods { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .period-box { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
+  .period-box .title { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 5px; }
+  .period-box .range { font-size: 15px; font-weight: 600; }
+  .period-box .count { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 3px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab { padding: 9px 18px; cursor: pointer; border-radius: var(--radius) var(--radius) 0 0; border: 1px solid transparent; border-bottom: none; color: var(--muted); font-size: 13px; font-weight: 500; transition: .15s; white-space: nowrap; }
+  .tab:hover { color: var(--text); background: var(--card); }
+  .tab.active { background: var(--card); border-color: var(--border); color: var(--text); }
+  .tab-badge { display: inline-block; background: var(--border); border-radius: 20px; padding: 1px 8px; font-size: 11px; margin-left: 5px; }
+  .tab.active .tab-badge { background: var(--accent); color: #fff; }
+  .tab.orange .tab-badge { background: rgba(251,146,60,.2); color: var(--orange); }
+  .tab.orange.active .tab-badge { background: var(--orange); color: #fff; }
+
+  /* Toolbar */
+  .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  input[type=search], input[type=date], select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 11px; font-size: 13px; outline: none;
+  }
+  input[type=search] { flex: 1; min-width: 180px; }
+  input[type=date]   { width: 140px; color-scheme: dark; }
+  input[type=search]:focus, input[type=date]:focus, select:focus { border-color: var(--accent); }
+
+  /* Period filter */
+  .period-filter {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 13px 18px; margin-bottom: 18px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .period-filter label { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .period-filter .sep { color: var(--muted); }
+  .period-filter button {
+    background: var(--accent); border: none; color: #fff; border-radius: 6px;
+    padding: 6px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .period-filter button:hover { opacity: .85; }
+  .period-filter button.clear {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+  }
+  .period-filter button.clear:hover { border-color: var(--text); color: var(--text); }
+  .toggle-frete { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; }
+  .toggle-frete input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+  .period-active { font-size: 12px; color: var(--accent); margin-left: auto; }
+
+  /* Table */
+  .table-scroll { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--surface); position: sticky; top: 0; z-index: 1; padding: 9px 13px;
+       text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
+       text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border);
+       white-space: nowrap; cursor: pointer; user-select: none; }
+  th:hover { color: var(--text); }
+  td { padding: 8px 13px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(79,124,255,.05); }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .badge-green  { background: rgba(52,211,153,.15);  color: var(--green); }
+  .badge-orange { background: rgba(251,146,60,.15);  color: var(--orange); }
+  .badge-yellow { background: rgba(251,191,36,.15);  color: var(--yellow); }
+  .badge-red    { background: rgba(248,113,113,.15); color: var(--red); }
+  .badge-blue   { background: rgba(79,124,255,.15);  color: var(--accent); }
+  .badge-muted  { background: rgba(148,163,184,.1);  color: var(--muted); }
+
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-footer { padding: 9px 14px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .pager { display: flex; gap: 6px; align-items: center; }
+  .pager button { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 12px; }
+  .pager button:disabled { opacity: .4; cursor: default; }
+  .pager button:not(:disabled):hover { border-color: var(--accent); }
+  #error-msg { background: rgba(248,113,113,.1); border: 1px solid var(--red); border-radius: var(--radius); padding: 14px 18px; color: var(--red); margin: 24px; display: none; }
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:var(--bg);">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:44px 48px;text-align:center;max-width:380px;width:90%;">
+    <svg width="52" height="52" viewBox="0 0 28 28" fill="none" style="margin-bottom:18px">
+      <rect width="28" height="28" rx="6" fill="#4f7cff" fill-opacity=".18"/>
+      <rect x="5" y="8" width="7" height="12" rx="2" fill="#4f7cff"/>
+      <rect x="16" y="5" width="7" height="15" rx="2" fill="#34d399"/>
+      <rect x="5" y="22" width="18" height="1.5" rx=".75" fill="#94a3b8"/>
+    </svg>
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:8px;">Notas Fiscais</h2>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:32px;">Acesse vs Domínio Web — reconciliação</p>
+    <button onclick="signInWithGoogle()" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#1a1a1a;border:none;border-radius:8px;padding:12px 20px;font-size:14px;font-weight:600;cursor:pointer;width:100%;box-shadow:0 1px 4px rgba(0,0,0,.35);">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.6 33 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.1 8 3l5.7-5.7C34.5 6.5 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.1 18.9 12 24 12c3.1 0 5.9 1.1 8 3l5.7-5.7C34.5 6.5 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.3 26.7 36 24 36c-5.2 0-9.5-3-11.3-7.3l-6.5 5C9.6 39.7 16.3 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.6l6.2 5.2C37.1 38.6 44 33 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+      Entrar com Google
+    </button>
+  </div>
+</div>
+
+<header>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+    <rect width="28" height="28" rx="6" fill="#4f7cff" fill-opacity=".18"/>
+    <rect x="5" y="8" width="7" height="12" rx="2" fill="#4f7cff"/>
+    <rect x="16" y="5" width="7" height="15" rx="2" fill="#34d399"/>
+    <rect x="5" y="22" width="18" height="1.5" rx=".75" fill="#94a3b8"/>
+  </svg>
+  <h1>Notas Fiscais</h1>
+  <span>Acesse vs Domínio Web — reconciliação</span>
+  <div id="user-bar" style="display:none;margin-left:auto;display:none;align-items:center;gap:10px;">
+    <span id="user-name" style="color:var(--muted);font-size:13px;"></span>
+    <button onclick="doSignOut()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;">Sair</button>
+  </div>
+</header>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p id="loading-msg" style="color:var(--muted)">Carregando DuckDB…</p>
+</div>
+<div id="error-msg"></div>
+
+<div id="app">
+  <!-- Period filter -->
+  <div class="period-filter">
+    <label>Período de comparação</label>
+    <input type="date" id="pf-from">
+    <span class="sep">—</span>
+    <input type="date" id="pf-to">
+    <button onclick="applyPeriodFilter()">Aplicar</button>
+    <button class="clear" onclick="clearPeriodFilter()">Limpar</button>
+    <span class="sep">|</span>
+    <label class="toggle-frete">
+      <input type="checkbox" id="chk-frete" onchange="toggleFrete()">
+      Remover Frete
+    </label>
+    <span class="period-active" id="period-active"></span>
+  </div>
+
+  <!-- Cards -->
+  <div class="cards">
+    <div class="card blue">
+      <div class="label">Acesse</div>
+      <div class="value" id="c-total-dw">—</div>
+      <div class="sub" id="c-linhas-dw">NFs únicas</div>
+    </div>
+    <div class="card blue">
+      <div class="label">Domínio Web (<span id="c-empresas">?</span> empresas)</div>
+      <div class="value" id="c-total-erp">—</div>
+      <div class="sub" id="c-linhas-erp">NFs únicas</div>
+    </div>
+    <div class="card green">
+      <div class="label">Nos dois — OK</div>
+      <div class="value" id="c-ambos">—</div>
+      <div class="sub">CFOP coincide</div>
+    </div>
+    <div class="card orange">
+      <div class="label">CFOP Divergente</div>
+      <div class="value" id="c-cfop-div">—</div>
+      <div class="sub">nota encontrada, CFOP difere</div>
+    </div>
+    <div class="card yellow">
+      <div class="label">Só no Acesse</div>
+      <div class="value" id="c-so-dw">—</div>
+      <div class="sub">não está no Domínio Web</div>
+    </div>
+    <div class="card red">
+      <div class="label">Só no Domínio Web</div>
+      <div class="value" id="c-so-erp">—</div>
+      <div class="sub">não está no Acesse</div>
+    </div>
+  </div>
+
+  <!-- Periods -->
+  <div class="periods">
+    <div class="period-box">
+      <div class="title">📥 Acesse — Entradas</div>
+      <div class="range" id="p-dw">—</div>
+      <div class="count" id="p-dw-count"></div>
+    </div>
+    <div class="period-box">
+      <div class="title">📥 Domínio Web — Entradas</div>
+      <div class="range" id="p-erp">—</div>
+      <div class="count" id="p-erp-count"></div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="dw">
+      Acesse <span class="tab-badge" id="badge-dw">0</span>
+    </div>
+    <div class="tab" data-tab="erp">
+      Domínio Web <span class="tab-badge" id="badge-erp">0</span>
+    </div>
+    <div class="tab" data-tab="ambos">
+      Nos dois — OK <span class="tab-badge" id="badge-ambos">0</span>
+    </div>
+    <div class="tab orange" data-tab="cfop-div">
+      CFOP Divergente <span class="tab-badge" id="badge-cfop-div">0</span>
+    </div>
+    <div class="tab" data-tab="so-dw">
+      Só no Acesse <span class="tab-badge" id="badge-so-dw">0</span>
+    </div>
+    <div class="tab" data-tab="so-erp">
+      Só no Domínio Web <span class="tab-badge" id="badge-so-erp">0</span>
+    </div>
+    <div class="tab" data-tab="cancelado-erp">
+      Cancelado Dom. Web <span class="tab-badge" id="badge-cancelado-erp">0</span>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="table-toolbar">
+      <input type="search" id="search" placeholder="Buscar nota, fornecedor, loja, empresa…">
+      <select id="loja-filter"><option value="">Todas as lojas</option></select>
+      <select id="empresa-filter"><option value="">Todas as empresas</option></select>
+      <button id="btn-csv" onclick="downloadCSV()" style="background:var(--accent);border:none;color:#fff;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" title="Baixar todos os registros filtrados como CSV">⬇ CSV</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead id="thead"><tr></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="row-count">—</span>
+      <div class="pager">
+        <button id="btn-prev" onclick="changePage(-1)">← Anterior</button>
+        <span id="page-info" style="color:var(--muted);font-size:12px"></span>
+        <button id="btn-next" onclick="changePage(1)">Próxima →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm';
+import { initializeApp }                                from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, signInWithPopup, GoogleAuthProvider,
+         onAuthStateChanged, signOut }                  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+
+// ─── Firebase Auth ─────────────────────────────────────────────────────────────
+const _fbApp = initializeApp({
+  apiKey:            "AIzaSyABzXFYeJs-fWlCMRyScpXPdXttgM-eb2s",
+  authDomain:        "dipcontabil.firebaseapp.com",
+  projectId:         "dipcontabil",
+  storageBucket:     "dipcontabil.firebasestorage.app",
+  messagingSenderId: "2195598559",
+  appId:             "1:2195598559:web:27cd387053d49e9ffb8d6a",
+});
+const _auth = getAuth(_fbApp);
+
+window.signInWithGoogle = () =>
+  signInWithPopup(_auth, new GoogleAuthProvider()).catch(e => alert('Erro ao entrar: ' + e.message));
+window.doSignOut = () => signOut(_auth);
+
+let _bootstrapped = false;
+onAuthStateChanged(_auth, user => {
+  const loginScreen = document.getElementById('login-screen');
+  const userBar     = document.getElementById('user-bar');
+  if (user) {
+    loginScreen.style.display = 'none';
+    userBar.style.display     = 'flex';
+    document.getElementById('user-name').textContent = user.displayName || user.email;
+    if (!_bootstrapped) { _bootstrapped = true; bootstrap(); }
+  } else {
+    loginScreen.style.display = 'flex';
+    userBar.style.display     = 'none';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display     = 'none';
+  }
+});
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let db, conn;
+let currentTab = 'dw';
+let currentPage = 1;
+const PAGE_SIZE = 100;
+let totalRows = 0;
+let sortCol = null, sortDir = 1;
+let allData = [], filteredData = [];
+let filterFrom = '', filterTo = '';
+let removeFrete = false;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function initDuckDB() {
+  setLoading('Iniciando DuckDB-WASM…');
+  const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+  const workerUrl = URL.createObjectURL(
+    new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+  );
+  const worker = new Worker(workerUrl);
+  db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
+  await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+  URL.revokeObjectURL(workerUrl);
+  conn = await db.connect();
+}
+
+async function loadParquet(name) {
+  setLoading(`Carregando ${name}.parquet…`);
+  const resp = await fetch(`data/${name}.parquet`);
+  if (!resp.ok) throw new Error(`Falha ao carregar data/${name}.parquet (${resp.status})`);
+  await db.registerFileBuffer(`${name}.parquet`, new Uint8Array(await resp.arrayBuffer()));
+}
+
+async function bootstrap() {
+  try {
+    await initDuckDB();
+    await Promise.all(['dominio_web','erp_entradas','coincidencias'].map(loadParquet));
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display     = 'block';
+    setupTabs();
+    await computeDynamicStats();
+    await switchTab('dw');
+  } catch(e) { showError(e.message); }
+}
+
+async function query(sql) {
+  const r = await conn.query(sql);
+  return r.toArray().map(row => Object.fromEntries(Object.entries(row.toJSON())));
+}
+
+// ─── Period filter ────────────────────────────────────────────────────────────
+function dateCond(col) {
+  return filterFrom ? `AND ${col} >= '${filterFrom}' AND ${col} <= '${filterTo}'` : '';
+}
+
+const CFOP_EXCLUIR      = `cfop_norm NOT IN ('1933', '2933')`;
+const CFOP_FRETE_DW     = `cfop_norm NOT IN ('2353', '1353')`;
+const CFOP_FRETE_ERP    = `(cfop_norm IS NULL OR cfop_norm NOT IN ('2353', '1353'))`;
+
+async function computeDynamicStats() {
+  const freteDW  = removeFrete ? `AND ${CFOP_FRETE_DW}`  : '';
+  const freteERP = removeFrete ? `AND ${CFOP_FRETE_ERP}` : '';
+  const dcDw = filterFrom
+    ? `WHERE data >= '${filterFrom}' AND data <= '${filterTo}' AND ${CFOP_EXCLUIR} ${freteDW}`
+    : `WHERE ${CFOP_EXCLUIR} ${freteDW}`;
+  const dcErp = filterFrom
+    ? `WHERE data >= '${filterFrom}' AND data <= '${filterTo}' ${freteERP}`
+    : freteERP ? `WHERE ${CFOP_FRETE_ERP}` : '';
+  const [dwS, erpS] = await Promise.all([
+    query(`SELECT
+      COUNT(DISTINCT CASE WHEN numero_int IS NOT NULL THEN CAST(numero_int AS BIGINT) END) AS total_dw,
+      COUNT(DISTINCT CASE WHEN status='Ambos - OK' THEN CAST(numero_int AS BIGINT) END) AS ambos_ok,
+      COUNT(DISTINCT CASE WHEN status='Ambos - CFOP divergente' THEN CAST(numero_int AS BIGINT) END) AS cfop_div,
+      COUNT(DISTINCT CASE WHEN status='So no Acesse' THEN CAST(numero_int AS BIGINT) END) AS so_dw,
+      COUNT(*) AS linhas_dw, MIN(data) AS min_dw, MAX(data) AS max_dw
+    FROM parquet_scan('dominio_web.parquet') ${dcDw}`),
+    query(`SELECT
+      COUNT(DISTINCT CASE WHEN nota_int IS NOT NULL THEN CAST(nota_int AS BIGINT) END) AS total_erp,
+      COUNT(DISTINCT CASE WHEN status='So no Dominio.Web' THEN CAST(nota_int AS BIGINT) END) AS so_erp,
+      COUNT(DISTINCT CASE WHEN status='Cancelado - Dominio.Web' THEN CAST(nota_int AS BIGINT) END) AS cancelado_erp,
+      COUNT(*) AS linhas_erp,
+      COUNT(DISTINCT empresa_id) AS num_empresas,
+      MIN(data) AS min_erp, MAX(data) AS max_erp
+    FROM parquet_scan('erp_entradas.parquet') ${dcErp}`),
+  ]);
+  const dw = dwS[0] || {}, erp = erpS[0] || {};
+  renderStats({
+    total_dw: dw.total_dw ?? 0, total_erp: erp.total_erp ?? 0,
+    ambos_ok: dw.ambos_ok ?? 0, cfop_div: dw.cfop_div ?? 0,
+    so_dw: dw.so_dw ?? 0,       so_erp: erp.so_erp ?? 0,
+    cancelado_erp: erp.cancelado_erp ?? 0,
+    linhas_dw: dw.linhas_dw ?? 0, linhas_erp: erp.linhas_erp ?? 0,
+    num_empresas: erp.num_empresas ?? 0,
+    periodo_dw:  fmtDateRange(dw.min_dw,  dw.max_dw),
+    periodo_erp: fmtDateRange(erp.min_erp, erp.max_erp),
+  });
+}
+
+function fmtDateRange(a, b) {
+  if (!a) return '—';
+  return `${fmtDateStr(a)} a ${fmtDateStr(b)}`;
+}
+function fmtDateStr(s) {
+  if (!s) return '?';
+  const [y, m, d] = String(s).substring(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}
+
+window.toggleFrete = async function() {
+  removeFrete = document.getElementById('chk-frete').checked;
+  await computeDynamicStats();
+  await switchTab(currentTab);
+};
+
+window.applyPeriodFilter = async function() {
+  const f = document.getElementById('pf-from').value;
+  const t = document.getElementById('pf-to').value;
+  if (!f || !t) return;
+  filterFrom = f; filterTo = t;
+  const label = `${fmtDateStr(f)} – ${fmtDateStr(t)}`;
+  setText('period-active', `Filtrando: ${label}`);
+  await computeDynamicStats();
+  await switchTab(currentTab);
+};
+
+window.clearPeriodFilter = async function() {
+  filterFrom = ''; filterTo = '';
+  document.getElementById('pf-from').value = '';
+  document.getElementById('pf-to').value   = '';
+  setText('period-active', '');
+  await computeDynamicStats();
+  await switchTab(currentTab);
+};
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+function renderStats(s) {
+  const ambos = (s.ambos_ok ?? 0);
+  const cfopDiv = (s.cfop_div ?? 0);
+  setText('c-total-dw',   fmt(s.total_dw));
+  setText('c-total-erp',  fmt(s.total_erp));
+  setText('c-empresas',   fmt(s.num_empresas));
+  setText('c-ambos',      fmt(ambos));
+  setText('c-cfop-div',   fmt(cfopDiv));
+  setText('c-so-dw',      fmt(s.so_dw));
+  setText('c-so-erp',     fmt(s.so_erp));
+  setText('p-dw',         s.periodo_dw  || '—');
+  setText('p-erp',        s.periodo_erp || '—');
+  setText('p-dw-count',   `${fmt(s.linhas_dw)} linhas totais`);
+  setText('p-erp-count',  `${fmt(s.linhas_erp)} linhas totais`);
+  setText('badge-dw',     fmt(s.total_dw));
+  setText('badge-erp',    fmt(s.total_erp));
+  setText('badge-ambos',  fmt(ambos));
+  setText('badge-cfop-div', fmt(cfopDiv));
+  setText('badge-so-dw',          fmt(s.so_dw));
+  setText('badge-so-erp',         fmt(s.so_erp));
+  setText('badge-cancelado-erp',  fmt(s.cancelado_erp ?? 0));
+  setText('c-linhas-dw',  `${fmt(s.total_dw)} NFs únicas`);
+  setText('c-linhas-erp', `${fmt(s.total_erp)} NFs únicas`);
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function setupTabs() {
+  document.querySelectorAll('.tab').forEach(t =>
+    t.addEventListener('click', () => switchTab(t.dataset.tab)));
+}
+
+async function switchTab(tab) {
+  currentTab = tab;
+  currentPage = 1;
+  sortCol = null;
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === tab));
+
+  // Build WHERE conditions dynamically (status + optional date range)
+  const dwConds   = [];
+  const erpConds  = [];
+  const coinConds = [];
+
+  dwConds.push(CFOP_EXCLUIR);
+  coinConds.push(`cfop_dw NOT IN ('1933', '2933')`);
+  if (filterFrom) {
+    dwConds.push(`data >= '${filterFrom}' AND data <= '${filterTo}'`);
+    erpConds.push(`data >= '${filterFrom}' AND data <= '${filterTo}'`);
+    coinConds.push(`data_dw >= '${filterFrom}' AND data_dw <= '${filterTo}'`);
+  }
+  if (removeFrete) { dwConds.push(CFOP_FRETE_DW); erpConds.push(CFOP_FRETE_ERP); coinConds.push(`cfop_dw NOT IN ('2353', '1353')`); }
+  if (tab === 'so-dw')          dwConds.push("status = 'So no Acesse'");
+  if (tab === 'so-erp')         erpConds.push("status = 'So no Dominio.Web'");
+  if (tab === 'cancelado-erp')  erpConds.push("status = 'Cancelado - Dominio.Web'");
+  if (tab === 'ambos')    { dwConds.push("status = 'Ambos - OK'");                coinConds.push("status = 'Ambos - OK'"); }
+  if (tab === 'cfop-div') { dwConds.push("status = 'Ambos - CFOP divergente'");   coinConds.push("status = 'Ambos - CFOP divergente'"); }
+
+  const dwWhere   = dwConds.length   ? 'WHERE ' + dwConds.join(' AND ')   : '';
+  const erpWhere  = erpConds.length  ? 'WHERE ' + erpConds.join(' AND ')  : '';
+  const coinWhere = coinConds.length ? 'WHERE ' + coinConds.join(' AND ') : '';
+
+  if (tab === 'dw' || tab === 'so-dw') {
+    allData = await query(`
+      SELECT empresa, loja, numero_int AS nota, data, fornecedor,
+             total, cfop_norm AS cfop, natureza, estado, status, tipo_entrada
+      FROM parquet_scan('dominio_web.parquet')
+      ${dwWhere}
+      ORDER BY data DESC, loja, numero_int
+    `);
+  } else if (tab === 'erp' || tab === 'so-erp' || tab === 'cancelado-erp') {
+    allData = await query(`
+      SELECT empresa_id, empresa_nome AS empresa, nota, data,
+             fornecedor, cfop_norm AS cfop, uf, valor, tipo, status
+      FROM parquet_scan('erp_entradas.parquet')
+      ${erpWhere}
+      ORDER BY empresa_id, data DESC, nota
+    `);
+  } else if (tab === 'ambos' || tab === 'cfop-div') {
+    allData = await query(`
+      SELECT nota_num AS nota, loja, data_dw, forn_dw AS forn_dominio,
+             valor_dw, cfop_dw AS cfop_dominio,
+             empresa, data_erp, forn_erp AS forn_erp,
+             valor_erp, cfop_erp AS cfop_erp, status
+      FROM parquet_scan('coincidencias.parquet')
+      ${coinWhere}
+      ORDER BY nota
+    `);
+  }
+
+  filteredData = [...allData];
+  document.getElementById('search').value = '';
+  renderHeaders();
+  renderTable();
+  updateFilters(allData);
+}
+
+// ─── Filters ──────────────────────────────────────────────────────────────────
+function updateFilters(data) {
+  const lojaEl    = document.getElementById('loja-filter');
+  const empresaEl = document.getElementById('empresa-filter');
+
+  const lojas = [...new Set(data.map(r => r.loja).filter(Boolean))].sort();
+  lojaEl.innerHTML = '<option value="">Todas as lojas</option>' +
+    lojas.map(v => `<option>${v}</option>`).join('');
+
+  const empresas = [...new Set(data.map(r => r.empresa || r.empresa_nome).filter(Boolean))].sort();
+  empresaEl.innerHTML = '<option value="">Todas as empresas</option>' +
+    empresas.map(v => `<option>${v}</option>`).join('');
+}
+
+function setupFilters() {} // wire-up done via onchange below
+
+document.getElementById('search').addEventListener('input', applyFilters);
+document.getElementById('loja-filter').addEventListener('change', applyFilters);
+document.getElementById('empresa-filter').addEventListener('change', applyFilters);
+
+function applyFilters() {
+  const q    = document.getElementById('search').value.toLowerCase();
+  const loja = document.getElementById('loja-filter').value;
+  const emp  = document.getElementById('empresa-filter').value;
+
+  filteredData = allData.filter(row => {
+    if (q && !Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q))) return false;
+    if (loja && 'loja' in row && row.loja !== loja) return false;
+    if (emp  && ('empresa' in row || 'empresa_nome' in row) && (row.empresa || row.empresa_nome) !== emp) return false;
+    return true;
+  });
+  currentPage = 1;
+  renderTable();
+}
+
+// ─── Sort ─────────────────────────────────────────────────────────────────────
+window.sortBy = function(col) {
+  if (sortCol === col) sortDir = -sortDir; else { sortCol = col; sortDir = 1; }
+  filteredData.sort((a, b) => {
+    const va = a[col] ?? '', vb = b[col] ?? '';
+    return va < vb ? -sortDir : va > vb ? sortDir : 0;
+  });
+  currentPage = 1;
+  renderTable();
+};
+
+// ─── Table ────────────────────────────────────────────────────────────────────
+const COL_LABELS = {
+  loja: 'Loja', nota: 'NF', data: 'Data', serie: 'Série', match: 'Match Acesse',
+  forn_dominio: 'Forn. Acesse', forn_acesse: 'Forn. Acesse',
+  data_dw: 'Data Acesse', data_acesse: 'Data Acesse', total_acesse: 'Total Acesse',
+  empresa_erp: 'Empresa Dom. Web', cfop: 'CFOP',
+  fornecedor: 'Fornecedor', forn_erp: 'Forn. Dom. Web',
+  total: 'Total (R$)', valor: 'Valor (R$)', valor_dw: 'Valor Acesse', valor_erp: 'Valor Dom. Web',
+  cfop_dominio: 'CFOP Acesse', cfop_erp: 'CFOP Dom. Web',
+  natureza: 'Natureza', tipo_entrada: 'Tipo Entrada', estado: 'UF', uf: 'UF',
+  status: 'Status', empresa: 'Empresa', empresa_id: 'ID Emp.',
+  tipo: 'Tipo', data_erp: 'Data Dom. Web',
+  empresa_nome: 'Empresa',
+};
+const MONEY_COLS = new Set(['total','valor','valor_dw','valor_erp']);
+const STATUS_MAP = {
+  'Ambos - OK':               ['badge-green',  'Ambos — OK'],
+  'Ambos - CFOP divergente':  ['badge-orange', 'CFOP divergente'],
+  'So no Acesse':             ['badge-yellow', 'Só no Acesse'],
+  'So no Dominio.Web':        ['badge-red',    'Só no Domínio Web'],
+  'Cancelado - Dominio.Web':  ['badge-muted',  'Cancelado Dom. Web'],
+  'Sem numero':               ['badge-muted',  'Sem número'],
+};
+
+function renderHeaders() {
+  const cols = allData.length ? Object.keys(allData[0]) : [];
+  const tr = document.getElementById('thead').querySelector('tr');
+  tr.innerHTML = cols.map(c => {
+    const lbl   = COL_LABELS[c] || c;
+    const arrow = sortCol === c ? (sortDir > 0 ? ' ↑' : ' ↓') : '';
+    return `<th onclick="sortBy('${c}')">${lbl}${arrow}</th>`;
+  }).join('');
+}
+
+function renderTable() {
+  totalRows = filteredData.length;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = filteredData.slice(start, start + PAGE_SIZE);
+  const cols  = allData.length ? Object.keys(allData[0]) : [];
+
+  document.getElementById('tbody').innerHTML = page.map(row =>
+    '<tr>' + cols.map(c => {
+      let v = row[c] ?? '';
+      if (c === 'status') {
+        const [cls, lbl] = STATUS_MAP[v] || ['badge-blue', v];
+        return `<td><span class="badge ${cls}">${lbl}</span></td>`;
+      }
+      if (c === 'cfop_dominio' && row['cfop_erp'] && v !== row['cfop_erp']) {
+        return `<td style="color:var(--orange);font-weight:600">${v}</td>`;
+      }
+      if (c === 'cfop_erp' && row['cfop_dominio'] && v !== row['cfop_dominio']) {
+        return `<td style="color:var(--orange);font-weight:600">${v}</td>`;
+      }
+      if (MONEY_COLS.has(c) && v !== '') return `<td class="num">${fmtMoney(v)}</td>`;
+      // Inteiros armazenados como float: mostrar sem casas decimais
+      if (c === 'nota' || c === 'nota_num') { const n = Number(v); if (!isNaN(n) && n === Math.floor(n)) v = n.toFixed(0); }
+      return `<td title="${v}">${v}</td>`;
+    }).join('') + '</tr>'
+  ).join('');
+
+  const totalPages = Math.ceil(totalRows / PAGE_SIZE) || 1;
+  setText('row-count', `${fmt(totalRows)} registros`);
+  setText('page-info', `Pág. ${currentPage} / ${totalPages}`);
+  document.getElementById('btn-prev').disabled = currentPage <= 1;
+  document.getElementById('btn-next').disabled = currentPage >= totalPages;
+}
+
+window.changePage = function(delta) {
+  const tp = Math.ceil(totalRows / PAGE_SIZE) || 1;
+  currentPage = Math.max(1, Math.min(currentPage + delta, tp));
+  renderTable();
+};
+
+window.downloadCSV = function() {
+  if (!filteredData.length) return;
+  const cols = Object.keys(filteredData[0]);
+  const escape = v => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const rows = [cols.join(','), ...filteredData.map(r => cols.map(c => escape(r[c])).join(','))];
+  const blob = new Blob(['﻿' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `nf_${currentTab}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+const fmt      = n => Number(n ?? 0).toLocaleString('pt-BR');
+const fmtMoney = n => Number(n ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const setText  = (id, t) => { const el = document.getElementById(id); if (el) el.textContent = t; };
+const setLoading = msg => { const el = document.getElementById('loading-msg'); if (el) el.textContent = msg; };
+function showError(msg) {
+  document.getElementById('loading').style.display = 'none';
+  const el = document.getElementById('error-msg');
+  el.style.display = 'block';
+  el.innerHTML = `<strong>Erro ao carregar:</strong><br>${msg}<br><br>
+    Rode <code>py processar_notas.py</code> e acesse via
+    <code>py -m http.server 8000</code>.`;
+}
+
+// bootstrap() é chamado pelo onAuthStateChanged acima
+</script>
+</body>
+</html>
