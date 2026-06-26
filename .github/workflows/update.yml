@@ -35,9 +35,8 @@ jobs:
         run: python processar_notas.py
 
       - name: Deploy Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DIPCONTABIL }}
-          projectId: dipcontabil
-          channelId: live
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_DIPCONTABIL }}' > /tmp/svc.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/svc.json
+          npx firebase-tools@latest deploy --only hosting --project dipcontabil --force
+          rm /tmp/svc.json
