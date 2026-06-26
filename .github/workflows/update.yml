@@ -79,6 +79,14 @@ jobs:
       - name: Deploy Firebase Hosting
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_DIPCONTABIL }}' > /tmp/svc.json
-          GOOGLE_APPLICATION_CREDENTIALS=/tmp/svc.json \
-            npx firebase-tools@latest deploy --only hosting --project dipcontabil
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/svc.json
+          set +e
+          npx firebase-tools@latest deploy --only hosting --project dipcontabil 2>&1 | tee /tmp/deploy.log
+          CODE=${PIPESTATUS[0]}
+          set -e
           rm -f /tmp/svc.json
+          if [ "$CODE" -ne 0 ] && grep -q "current active version" /tmp/deploy.log; then
+            echo "Site ja esta atualizado com este conteudo — OK."
+            exit 0
+          fi
+          exit "$CODE"
