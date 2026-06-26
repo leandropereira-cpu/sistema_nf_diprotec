@@ -72,17 +72,13 @@ jobs:
       - name: Processar notas e gerar Parquet
         run: python processar_notas.py
 
+      - name: Gerar build info (garante versão nova no Firebase)
+        run: |
+          echo "run=${{ github.run_id }} at $(date -u)" > .build-info
+
       - name: Deploy Firebase Hosting
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_DIPCONTABIL }}' > /tmp/svc.json
-          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/svc.json
-          output=$(npx firebase-tools@latest deploy --only hosting --project dipcontabil 2>&1)
-          code=$?
-          echo "$output"
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/svc.json \
+            npx firebase-tools@latest deploy --only hosting --project dipcontabil
           rm -f /tmp/svc.json
-          # "current active version" = conteudo identico ao ja publicado = OK
-          if [ $code -ne 0 ] && echo "$output" | grep -q "current active version"; then
-            echo "Versao ja esta ativa no Firebase — nenhuma alteracao necessaria."
-            exit 0
-          fi
-          exit $code
