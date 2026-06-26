@@ -1,21 +1,59 @@
 name: Atualizar Dados e Deploy
 
 on:
-  workflow_dispatch:          # disparo manual pelo GitHub
-  push:
-    branches: [master]
+  workflow_dispatch:          # disparo manual sempre roda tudo
   schedule:
-    - cron: '0 11 * * 1-5'   # 11h UTC = 8h BRT, de seg a sex
+    - cron: '0 11 * * 1-5'   # 08h BRT (seg-sex)
+    - cron: '0 15 * * 1-5'   # 12h BRT (seg-sex)
+    - cron: '0 18 * * 1-5'   # 15h BRT (seg-sex)
 
 jobs:
+  # ── 1. Verifica se há arquivos novos no Drive ───────────────────────────────
+  check-drive:
+    runs-on: ubuntu-latest
+    outputs:
+      has_updates: ${{ steps.check.outputs.has_updates }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências leves
+        run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: Restaurar cache do timestamp
+        uses: actions/cache@v4
+        with:
+          path: .last_drive_check
+          key: drive-ts-${{ github.run_id }}
+          restore-keys: drive-ts-
+
+      - name: Verificar Drive
+        id: check
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          python check_drive_updates.py \
+            && echo "has_updates=true"  >> $GITHUB_OUTPUT \
+            || echo "has_updates=false" >> $GITHUB_OUTPUT
+
+      - name: Salvar cache do timestamp
+        uses: actions/cache/save@v4
+        with:
+          path: .last_drive_check
+          key: drive-ts-${{ github.run_id }}
+
+  # ── 2. Pipeline completo (só roda se houver novidades ou disparo manual) ────
   update:
+    needs: check-drive
+    if: needs.check-drive.outputs.has_updates == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repositório
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
@@ -23,10 +61,10 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
-      - name: Baixar XLSX do Acesse (scraper)
+      - name: Baixar XLSX do Acesse (scraper — todos os sistemas)
         run: python scraper_compras_cfop.py
 
-      - name: Baixar XLS do Google Drive (Domínio Web + Flexotom)
+      - name: Baixar XLS do Google Drive (Domínio Web)
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: python download_drive.py
@@ -38,5 +76,13 @@ jobs:
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_DIPCONTABIL }}' > /tmp/svc.json
           export GOOGLE_APPLICATION_CREDENTIALS=/tmp/svc.json
-          npx firebase-tools@latest deploy --only hosting --project dipcontabil --force
-          rm /tmp/svc.json
+          output=$(npx firebase-tools@latest deploy --only hosting --project dipcontabil 2>&1)
+          code=$?
+          echo "$output"
+          rm -f /tmp/svc.json
+          # "current active version" = conteudo identico ao ja publicado = OK
+          if [ $code -ne 0 ] && echo "$output" | grep -q "current active version"; then
+            echo "Versao ja esta ativa no Firebase — nenhuma alteracao necessaria."
+            exit 0
+          fi
+          exit $code

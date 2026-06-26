@@ -10,8 +10,7 @@ Uso:
     py scraper_compras_cfop.py --destino C:\\Planilhas\\CFOP
 
 Sistemas:
-    diprotec, mafise, tecnisul, revestech, geo, spazio, cda
-    (flexotom: sem acesso externo — upload manual no Google Drive)
+    diprotec, mafise, tecnisul, revestech, geo, spazio, cda, flexotom
 """
 
 import argparse
@@ -33,7 +32,7 @@ SISTEMAS = {
     "geo":       "http://sistema.diprotec.com.br:44451/diprotecGeo",
     "spazio":    "http://sistema.diprotec.com.br:44451/spazio",
     "cda":       "http://sistema.diprotec.com.br:44450/cda",
-    # flexotom: sem acesso externo — subir XLSX manualmente no Google Drive
+    "flexotom":  "https://novoflex.lcdc.net.br:43440/novotom",
 }
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120"}
