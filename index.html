@@ -249,6 +249,9 @@
     <div class="tab" data-tab="cancelado-erp">
       Cancelado Dom. Web <span class="tab-badge" id="badge-cancelado-erp">0</span>
     </div>
+    <div class="tab" style="--tab-badge-bg:rgba(248,113,113,.2);--tab-badge-color:var(--red)" data-tab="valor-div">
+      Valor Divergente <span class="tab-badge" id="badge-valor-div" style="background:rgba(248,113,113,.2);color:var(--red)">0</span>
+    </div>
   </div>
 
   <!-- Table -->
@@ -387,6 +390,7 @@ async function computeDynamicStats() {
       COUNT(DISTINCT CASE WHEN status='Ambos - OK' THEN CAST(numero_int AS BIGINT) END) AS ambos_ok,
       COUNT(DISTINCT CASE WHEN status='Ambos - CFOP divergente' THEN CAST(numero_int AS BIGINT) END) AS cfop_div,
       COUNT(DISTINCT CASE WHEN status='So no Acesse' THEN CAST(numero_int AS BIGINT) END) AS so_dw,
+      COUNT(DISTINCT CASE WHEN status='Valor Divergente' THEN CAST(numero_int AS BIGINT) END) AS valor_div,
       COUNT(*) AS linhas_dw, MIN(data) AS min_dw, MAX(data) AS max_dw
     FROM parquet_scan('dominio_web.parquet') ${dcDw}`),
     query(`SELECT
@@ -403,6 +407,7 @@ async function computeDynamicStats() {
     total_dw: dw.total_dw ?? 0, total_erp: erp.total_erp ?? 0,
     ambos_ok: dw.ambos_ok ?? 0, cfop_div: dw.cfop_div ?? 0,
     so_dw: dw.so_dw ?? 0,       so_erp: erp.so_erp ?? 0,
+    valor_div: dw.valor_div ?? 0,
     cancelado_erp: erp.cancelado_erp ?? 0,
     linhas_dw: dw.linhas_dw ?? 0, linhas_erp: erp.linhas_erp ?? 0,
     num_empresas: erp.num_empresas ?? 0,
@@ -469,6 +474,7 @@ function renderStats(s) {
   setText('badge-so-dw',          fmt(s.so_dw));
   setText('badge-so-erp',         fmt(s.so_erp));
   setText('badge-cancelado-erp',  fmt(s.cancelado_erp ?? 0));
+  setText('badge-valor-div',      fmt(s.valor_div ?? 0));
   setText('c-linhas-dw',  `${fmt(s.total_dw)} NFs únicas`);
   setText('c-linhas-erp', `${fmt(s.total_erp)} NFs únicas`);
 }
@@ -499,6 +505,7 @@ async function switchTab(tab) {
     coinConds.push(`data_dw >= '${filterFrom}' AND data_dw <= '${filterTo}'`);
   }
   if (removeFrete) { dwConds.push(CFOP_FRETE_DW); erpConds.push(CFOP_FRETE_ERP); coinConds.push(`cfop_dw NOT IN ('2353', '1353')`); }
+  if (tab === 'valor-div')      dwConds.push("status = 'Valor Divergente'");
   if (tab === 'so-dw')          dwConds.push("status = 'So no Acesse'");
   if (tab === 'so-erp')         erpConds.push("status = 'So no Dominio.Web'");
   if (tab === 'cancelado-erp')  erpConds.push("status = 'Cancelado - Dominio.Web'");
@@ -509,7 +516,7 @@ async function switchTab(tab) {
   const erpWhere  = erpConds.length  ? 'WHERE ' + erpConds.join(' AND ')  : '';
   const coinWhere = coinConds.length ? 'WHERE ' + coinConds.join(' AND ') : '';
 
-  if (tab === 'dw' || tab === 'so-dw') {
+  if (tab === 'dw' || tab === 'so-dw' || tab === 'valor-div') {
     allData = await query(`
       SELECT empresa, loja, numero_int AS nota, data, fornecedor,
              total, cfop_norm AS cfop, natureza, estado, status, tipo_entrada
@@ -611,6 +618,7 @@ const STATUS_MAP = {
   'So no Acesse':             ['badge-yellow', 'Só no Acesse'],
   'So no Dominio.Web':        ['badge-red',    'Só no Domínio Web'],
   'Cancelado - Dominio.Web':  ['badge-muted',  'Cancelado Dom. Web'],
+  'Valor Divergente':         ['badge-red',    'Valor Divergente'],
   'Sem numero':               ['badge-muted',  'Sem número'],
 };
 

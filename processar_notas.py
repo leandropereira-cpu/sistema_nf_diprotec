@@ -8,7 +8,7 @@ Uso:
     py -m http.server 8000   -> http://localhost:8000
 """
 
-import re, os, json
+import re, os, json, difflib
 from pathlib import Path
 
 import msal, requests
@@ -774,6 +774,19 @@ def _dedup_dw(df: pd.DataFrame) -> pd.DataFrame:
 
 # ─── 3. Comparacao ────────────────────────────────────────────────────────────
 
+def _similar_supplier(a: str, b: str) -> bool:
+    """Retorna True se os nomes de fornecedor são similares (≥60% ou um contém o outro)."""
+    if not a or not b:
+        return False
+    def norm(s):
+        return re.sub(r'[^A-Z0-9 ]', '', s.upper().strip())
+    a, b = norm(a), norm(b)
+    if not a or not b:
+        return False
+    if a in b or b in a:
+        return True
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.60
+
 VALOR_TOLERANCE = 0.50
 
 def build_comparison(df_dw: pd.DataFrame, df_erp: pd.DataFrame):
@@ -899,11 +912,52 @@ def build_comparison(df_dw: pd.DataFrame, df_erp: pd.DataFrame):
     df_dw["status"]  = df_dw.apply(tag_dw,  axis=1)
     df_erp["status"] = df_erp.apply(tag_erp, axis=1)
 
+    # ── Detecta "Valor Divergente": número casado + fornecedor similar + valor diferente ──
+    # Lookups: numero → lista de {valor, fornecedor}
+    _dw_num_info: dict[int, list] = {}
+    for _, r in df_dw[df_dw["numero_int"].notna()].iterrows():
+        _dw_num_info.setdefault(int(r["numero_int"]), []).append({
+            "total": float(r["total"] or 0),
+            "fornecedor": str(r.get("fornecedor") or ""),
+        })
+
+    _erp_num_info: dict[int, list] = {}
+    for _, r in df_erp[df_erp["nota_int"].notna()].iterrows():
+        for cand in _nota_candidates(int(r["nota_int"])):
+            _erp_num_info.setdefault(cand, []).append({
+                "valor": float(r["valor"] or 0),
+                "fornecedor": str(r.get("fornecedor") or ""),
+            })
+
+    def _check_valor_div_dw(row):
+        if row["status"] != "So no Acesse" or pd.isna(row["numero_int"]):
+            return row["status"]
+        n = int(row["numero_int"])
+        erp_list = _erp_num_info.get(n, [])
+        forn = str(row.get("fornecedor") or "")
+        if any(_similar_supplier(forn, e["fornecedor"]) for e in erp_list):
+            return "Valor Divergente"
+        return row["status"]
+
+    def _check_valor_div_erp(row):
+        if row["status"] != "So no Dominio.Web" or pd.isna(row["nota_int"]):
+            return row["status"]
+        forn = str(row.get("fornecedor") or "")
+        for cand in _nota_candidates(int(row["nota_int"])):
+            dw_list = _dw_num_info.get(cand, [])
+            if any(_similar_supplier(forn, d["fornecedor"]) for d in dw_list):
+                return "Valor Divergente"
+        return row["status"]
+
+    df_dw["status"]  = df_dw.apply(_check_valor_div_dw,  axis=1)
+    df_erp["status"] = df_erp.apply(_check_valor_div_erp, axis=1)
+
     # Contagens refinadas
     n_ok         = int((df_dw["status"] == "Ambos - OK").sum())
     n_cfop_div   = int((df_dw["status"] == "Ambos - CFOP divergente").sum())
     n_so_dw      = int((df_dw["status"] == "So no Acesse").sum())
     n_so_erp_col = int((df_erp["status"] == "So no Dominio.Web").sum())
+    n_valor_div  = int((df_dw["status"] == "Valor Divergente").sum())
 
     # DataFrame de coincidencias (join por nota_num + filtro de valor)
     if ambos:
@@ -952,6 +1006,7 @@ def build_comparison(df_dw: pd.DataFrame, df_erp: pd.DataFrame):
         "cfop_div":    n_cfop_div,
         "so_dw":       n_so_dw,
         "so_erp":      n_so_erp_col,
+        "valor_div":   n_valor_div,
         "periodo_dw":  fmt_period("data", df_dw),
         "periodo_erp": fmt_period("data", df_erp),
         "linhas_dw":   len(df_dw),
@@ -1027,6 +1082,7 @@ def main():
     stats["ambos_ok"]  = int((df_dw["status"] == "Ambos - OK").sum())
     stats["cfop_div"]  = int((df_dw["status"] == "Ambos - CFOP divergente").sum())
     stats["so_dw"]     = int((df_dw["status"] == "So no Acesse").sum())
+    stats["valor_div"] = int((df_dw["status"] == "Valor Divergente").sum())
 
     print(f"\n  Periodo DW  : {stats['periodo_dw']}")
     print(f"  Periodo ERP : {stats['periodo_erp']}")
