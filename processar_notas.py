@@ -912,7 +912,7 @@ def build_comparison(df_dw: pd.DataFrame, df_erp: pd.DataFrame):
     df_dw["status"]  = df_dw.apply(tag_dw,  axis=1)
     df_erp["status"] = df_erp.apply(tag_erp, axis=1)
 
-    # ── Detecta "Valor Divergente": número casado + fornecedor similar + valor diferente ──
+    # ── Detecta "Possivel divergencia": número casado + fornecedor similar + valor diferente ──
     # Lookups: numero → lista de {valor, fornecedor}
     _dw_num_info: dict[int, list] = {}
     for _, r in df_dw[df_dw["numero_int"].notna()].iterrows():
@@ -936,7 +936,7 @@ def build_comparison(df_dw: pd.DataFrame, df_erp: pd.DataFrame):
         erp_list = _erp_num_info.get(n, [])
         forn = str(row.get("fornecedor") or "")
         if any(_similar_supplier(forn, e["fornecedor"]) for e in erp_list):
-            return "Valor Divergente"
+            return "Possivel divergencia"
         return row["status"]
 
     def _check_valor_div_erp(row):
@@ -946,7 +946,7 @@ def build_comparison(df_dw: pd.DataFrame, df_erp: pd.DataFrame):
         for cand in _nota_candidates(int(row["nota_int"])):
             dw_list = _dw_num_info.get(cand, [])
             if any(_similar_supplier(forn, d["fornecedor"]) for d in dw_list):
-                return "Valor Divergente"
+                return "Possivel divergencia"
         return row["status"]
 
     df_dw["status"]  = df_dw.apply(_check_valor_div_dw,  axis=1)
@@ -957,7 +957,7 @@ def build_comparison(df_dw: pd.DataFrame, df_erp: pd.DataFrame):
     n_cfop_div   = int((df_dw["status"] == "Ambos - CFOP divergente").sum())
     n_so_dw      = int((df_dw["status"] == "So no Acesse").sum())
     n_so_erp_col = int((df_erp["status"] == "So no Dominio.Web").sum())
-    n_valor_div  = int((df_dw["status"] == "Valor Divergente").sum())
+    n_valor_div  = int((df_dw["status"] == "Possivel divergencia").sum())
 
     # DataFrame de coincidencias (join por nota_num + filtro de valor)
     if ambos:
@@ -1082,7 +1082,7 @@ def main():
     stats["ambos_ok"]  = int((df_dw["status"] == "Ambos - OK").sum())
     stats["cfop_div"]  = int((df_dw["status"] == "Ambos - CFOP divergente").sum())
     stats["so_dw"]     = int((df_dw["status"] == "So no Acesse").sum())
-    stats["valor_div"] = int((df_dw["status"] == "Valor Divergente").sum())
+    stats["valor_div"] = int((df_dw["status"] == "Possivel divergencia").sum())
 
     print(f"\n  Periodo DW  : {stats['periodo_dw']}")
     print(f"  Periodo ERP : {stats['periodo_erp']}")

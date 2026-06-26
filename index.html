@@ -250,7 +250,7 @@
       Cancelado Dom. Web <span class="tab-badge" id="badge-cancelado-erp">0</span>
     </div>
     <div class="tab" style="--tab-badge-bg:rgba(248,113,113,.2);--tab-badge-color:var(--red)" data-tab="valor-div">
-      Valor Divergente <span class="tab-badge" id="badge-valor-div" style="background:rgba(248,113,113,.2);color:var(--red)">0</span>
+      Possivel divergencia <span class="tab-badge" id="badge-valor-div" style="background:rgba(248,113,113,.2);color:var(--red)">0</span>
     </div>
   </div>
 
@@ -390,7 +390,7 @@ async function computeDynamicStats() {
       COUNT(DISTINCT CASE WHEN status='Ambos - OK' THEN CAST(numero_int AS BIGINT) END) AS ambos_ok,
       COUNT(DISTINCT CASE WHEN status='Ambos - CFOP divergente' THEN CAST(numero_int AS BIGINT) END) AS cfop_div,
       COUNT(DISTINCT CASE WHEN status='So no Acesse' THEN CAST(numero_int AS BIGINT) END) AS so_dw,
-      COUNT(DISTINCT CASE WHEN status='Valor Divergente' THEN CAST(numero_int AS BIGINT) END) AS valor_div,
+      COUNT(DISTINCT CASE WHEN status='Possivel divergencia' THEN CAST(numero_int AS BIGINT) END) AS valor_div,
       COUNT(*) AS linhas_dw, MIN(data) AS min_dw, MAX(data) AS max_dw
     FROM parquet_scan('dominio_web.parquet') ${dcDw}`),
     query(`SELECT
@@ -505,7 +505,7 @@ async function switchTab(tab) {
     coinConds.push(`data_dw >= '${filterFrom}' AND data_dw <= '${filterTo}'`);
   }
   if (removeFrete) { dwConds.push(CFOP_FRETE_DW); erpConds.push(CFOP_FRETE_ERP); coinConds.push(`cfop_dw NOT IN ('2353', '1353')`); }
-  if (tab === 'valor-div')      dwConds.push("status = 'Valor Divergente'");
+  if (tab === 'valor-div')      dwConds.push("status = 'Possivel divergencia'");
   if (tab === 'so-dw')          dwConds.push("status = 'So no Acesse'");
   if (tab === 'so-erp')         erpConds.push("status = 'So no Dominio.Web'");
   if (tab === 'cancelado-erp')  erpConds.push("status = 'Cancelado - Dominio.Web'");
@@ -618,7 +618,7 @@ const STATUS_MAP = {
   'So no Acesse':             ['badge-yellow', 'Só no Acesse'],
   'So no Dominio.Web':        ['badge-red',    'Só no Domínio Web'],
   'Cancelado - Dominio.Web':  ['badge-muted',  'Cancelado Dom. Web'],
-  'Valor Divergente':         ['badge-red',    'Valor Divergente'],
+  'Possivel divergencia':         ['badge-red',    'Possivel divergencia'],
   'Sem numero':               ['badge-muted',  'Sem número'],
 };
 
